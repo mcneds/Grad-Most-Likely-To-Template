@@ -62,9 +62,20 @@ A: id    B: name
 
 > The script is **container‑bound** to the sheet (`SpreadsheetApp.getActive()`), so it must live inside the target Sheet.
 
-### 3) Frontend — Configure `index.html`
+### 3) Frontend — get `index.html` from `/frontend/`
 
-Edit the config at the top of the file:
+If you’re using this repo as a template, the latest `index.html` lives in **`/frontend/index.html`**.
+
+* Option A (recommended): **Copy** `/frontend/index.html` to your new repo’s root as `/index.html`.
+* Option B: Keep the file in `/frontend/` and add a tiny root redirect file:
+
+  ```html
+  <!-- /index.html at repo root -->
+  <meta http-equiv="refresh" content="0; url=frontend/index.html">
+  <link rel="canonical" href="frontend/index.html">
+  ```
+
+Then open `/index.html` and set the config at the top:
 
 ```js
 const CONFIG = {
@@ -77,14 +88,21 @@ const CONFIG = {
 
 Commit the change.
 
-### 4) Publish on GitHub Pages
+### 4) Turn on GitHub Pages in a **new repo**
 
-1. Repo → **Settings → Pages**.
-2. **Source**: *Deploy from a branch* → **Branch**: `main` (or default) → **Folder**: `/ (root)`.
-3. Ensure there’s an `index.html` at the **repo root**.
-4. Visit: `https://<your-username>.github.io/<repo-name>/`.
+If you’re starting fresh:
 
-If it loads but shows “API error: Failed to fetch”, see **Troubleshooting → CORS**.
+1. On GitHub, click **Use this template** (or **Fork**) to create your own repo.
+2. Add `/index.html` at the **repo root** (copy from `/frontend/index.html` as above).
+3. Go to **Settings → Pages**:
+
+   * **Source**: *Deploy from a branch*
+   * **Branch**: your default branch (e.g., `main`)
+   * **Folder**: **/** (root)
+4. Click **Save**. GitHub will publish your site at:
+   `https://<your-username>.github.io/<repo-name>/`
+
+> If you prefer, you can also use the `/docs` folder: move `index.html` into `/docs/` and choose **/docs** in Pages settings.
 
 ---
 
