@@ -36,7 +36,7 @@
       <div>
         <div class="tag" id="schoolTag">School</div>
         <h1 style="margin:6px 0 0" id="title">Most Likely To</h1>
-        <div class="muted" id="subtitle">Anonymous nominations. One per device.</div>
+        <div class="muted" id="subtitle">Anonymous nominations. Submit as many times as you like — just not for the same person from the same device.</div>
       </div>
       <div class="row">
         <button id="viewResponsesBtn" class="secondary">View Responses</button>
@@ -53,7 +53,7 @@
 // ===== CONFIG =====
 const CONFIG = {
   SCHOOL_NAME: "College Heights Secondary",
-  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzE3R0po2av80UPCG68tsxx3anA4GpC5_hNP9uQU-XrZJvNrw73FUr1ULuNnkdvkStc/exec", // use the /exec URL
+  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbykO6U7yEg9D2r_gWOsrWkiQ3lWQHyqJJ0D5CtVo8u8v-GKzDHI1p9obL8n-Jo6lJLP/exec",
   USE_SOFT_FINGERPRINT: true,
 };
 // ===== UTIL =====
@@ -81,9 +81,240 @@ function softFingerprint(){
 }
 
 // CORS-friendly: no custom headers -> no preflight
-async function api(action, payload = {}) {
+async function api(action, payload = {}){
   const body = JSON.stringify({ action, ...payload });
-  const res = await fetch(CONFIG.WEB_APP_URL, { method: 'POST', body });
+  const res = await fetch(CONFIG.WEB_APP_URL, { method:'POST', body });
+  if(!res.ok){ throw new Error(`API ${action} failed: ${res.status}`); }
+  return res.json();
+}
+
+function htmlesc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+// ===== VIEWS =====
+const app = $('#app');
+$('#schoolTag').textContent = CONFIG.SCHOOL_NAME;
+
+function renderLoading(){ app.innerHTML = `<div class="card">Loading…</div>`; }
+
+function renderNominate(names){
+  $('#title').textContent = 'Nominate — Most Likely To';
+  $('#subtitle').textContent = 'You can submit multiple times. You cannot nominate the same person twice from this device.';
+  const fields = names.map(n => `
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div>
+          <div class="pill"><strong>${htmlesc(n.name)}</strong><span class="muted">#${n.id}</span></div>
+          <div class="muted" style="margin-top:6px">Write a “most likely to …” for this person.</div>
+        </div>
+      </div>
+      <textarea data-name-id="${n.id}" placeholder="e.g., most likely to start a space company"></textarea>
+    </div>
+  `).join('');
+
+  app.innerHTML = `
+    <div class="grid" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between">
+        <h2>Nominate your classmates</h2>
+        <div class="muted">All fields optional — fill only the ones you want.</div>
+      </div>
+      <div class="grid names-grid">${fields}</div>
+      <div class="row" style="justify-content:flex-end; gap:8px">
+        <button class="secondary" id="goResponses">View Responses</button>
+        <button id="submitBtn">Submit Nominations</button>
+      </div>
+    </div>`;
+
+  $('#submitBtn').onclick = async () => {
+    const device_id = store.get();
+    const soft = softFingerprint();
+    const entries = $$('textarea').map(el => ({ name_id: Number(el.dataset.nameId), text: el.value.trim() }))
+      .filter(x => x.text.length > 0);
+    $('#submitBtn').disabled = true;
+    try{
+      const out = await api('submit', { device_id, soft, entries, admin_key: ADMIN_KEY||'' });
+      renderResponses(out.responses);
+    }catch(e){ alert(e.message); }
+    $('#submitBtn').disabled = false;
+  };
+  $('#goResponses').onclick = () => loadResponses();
+}
+
+function renderResponses(groups){
+  $('#title').textContent = 'Responses — Most Likely To';
+  $('#subtitle').textContent = 'Browse and upvote your favorites';
+  const sections = groups.map(g => {
+    const items = g.items.length ? g.items.map(it => `
+      <div class="card">
+        <div class="muted">#${g.name_id} • ${htmlesc(g.name)}</div>
+        <p style="margin:10px 0 12px; line-height:1.5">${htmlesc(it.text)}</p>
+        <div class="row" style="justify-content:space-between">
+          <button class="like ${store.voted(it.id)?'liked':''}" data-id="${it.id}">❤ Like <span class="muted">(${it.votes})</span></button>
+          <button class="danger hidden" data-del="${it.id}">Delete</button>
+        </div>
+      </div>
+    `).join('') : `<div class="muted">No nominations yet.</div>`;
+
+    return `
+      <section>
+        <h2>${htmlesc(g.name)} <span class="muted">(#${g.name_id})</span></h2>
+        <div class="grid">${items}</div>
+      </section>`;
+  }).join('
+');
+
+  app.innerHTML = `<div class="grid" style="gap:24px; margin:16px 0">${sections}</div>`;
+
+  $$('.like').forEach(btn => {
+    btn.onclick = async () => {
+      const id = Number(btn.dataset.id);
+      if(store.voted(id)) return; // client lock
+      btn.disabled = true;
+      try {
+        const out = await api('vote', { device_id: store.get(), nomination_id: id, soft: softFingerprint() });
+        store.setVoted(id);
+        await loadResponses();
+      } catch(e){ alert(e.message); }
+      btn.disabled = false;
+    };
+  });
+}
+
+async function loadHome(){
+  renderLoading();
+  try{
+    const out = await api('init', { device_id: store.get(), soft: softFingerprint() });
+    renderNominate(out.names);
+  }catch(e){ app.innerHTML = `<div class=\"card\">API error: ${e.message}</div>`; }
+}
+
+async function loadResponses(){
+  renderLoading();
+  try{
+    const out = await api('list', {});
+    renderResponses(out.responses);
+  }catch(e){ app.innerHTML = `<div class=\"card\">API error: ${e.message}</div>`; }
+}
+
+$('#viewResponsesBtn').onclick = () => loadResponses();
+$('#startOverBtn').onclick = () => store.reset();
+
+// ===== Admin panel (soft reveal with key) =====
+let ADMIN_KEY = '';
+function enableAdmin(){
+  const key = prompt('Enter admin key');
+  if(!key) return;
+  ADMIN_KEY = key;
+  $$('[data-del]').forEach(b => b.classList.remove('hidden'));
+  $$('[data-del]').forEach(b => b.onclick = async () => {
+    const id = Number(b.dataset.del);
+    if(!confirm(`Delete nomination #${id}?`)) return;
+    b.disabled = true;
+    try{
+      await api('adminDelete', { admin_key: ADMIN_KEY, nomination_id: id });
+      await loadResponses();
+      setTimeout(() => enableAdmin(), 200);
+    }catch(e){ alert(e.message); }
+    b.disabled = false;
+  });
+}
+
+window.addEventListener('keydown', (e) => {
+  if(e.key.toLowerCase()==='a') enableAdmin();
+});
+
+// boot
+loadHome();
+</script>
+</body>
+</html>
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Most Likely To — Nominations</title>
+  <style>
+    :root { --maxw: 980px; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; background: #0b0c10; color: #e8e8e8; }
+    header { position: sticky; top: 0; background: #0f1115e6; backdrop-filter: blur(8px); border-bottom: 1px solid #262a33; z-index: 10; }
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 16px; }
+    h1, h2 { margin: 8px 0 12px; }
+    .card { background: #12151c; border: 1px solid #232735; border-radius: 14px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+    .grid { display: grid; gap: 12px; }
+    .names-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+    .row { display: flex; gap: 12px; align-items: center; }
+    textarea, input[type="text"] { width: 100%; background: #0e1016; color: #e8e8e8; border: 1px solid #2b3040; padding: 10px 12px; border-radius: 10px; min-height: 60px; }
+    button { background: #2b7cff; color: white; border: 0; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+    button.secondary { background: #1c2230; color: #d7d7d7; border: 1px solid #2b3040; }
+    button.danger { background: #e5484d; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; background: #1a1f2b; border: 1px solid #2b3040; border-radius: 999px; padding: 6px 10px; font-size: 12px; }
+    .muted { color: #9aa4b2; font-size: 14px; }
+    .like { background: #1b2332; border: 1px solid #2b3040; }
+    .like.liked { outline: 2px solid #2b7cff; }
+    .footer { color: #8b94a2; font-size: 12px; text-align: center; padding: 40px 0; }
+    .hidden { display: none; }
+    .tag { display:inline-block; padding: 2px 8px; background:#1b1f2a; border:1px solid #2b3040; border-radius: 999px; font-size: 12px; color:#a7b0bf }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#0e1016; border:1px solid #2b3040; border-radius:6px; padding:2px 6px; font-size:12px }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap row" style="justify-content: space-between;">
+      <div>
+        <div class="tag" id="schoolTag">School</div>
+        <h1 style="margin:6px 0 0" id="title">Most Likely To</h1>
+        <div class="muted" id="subtitle">Anonymous nominations. One per device.</div>
+      </div>
+      <div class="row">
+        <button id="viewResponsesBtn" class="secondary">View Responses</button>
+        <button id="startOverBtn" class="secondary" title="Clear device token (debug)">Reset Device</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap" id="app"></main>
+
+  <div class="footer">Press <span class="kbd">A</span> for Admin.</div>
+
+<script>
+// ===== CONFIG =====
+const CONFIG = {
+  SCHOOL_NAME: "Your School Name",
+  WEB_APP_URL: "PUT_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE",
+  // set true to allow IP-based hints server-side (optional, best-effort)
+  USE_SOFT_FINGERPRINT: true,
+};
+// ===== UTIL =====
+const $ = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+const uid = () => crypto.randomUUID();
+const store = {
+  get k(){ return 'mlt_device_id_v2'; },
+  get(){ let v = localStorage.getItem(this.k); if(!v){ v = uid(); localStorage.setItem(this.k, v); } return v; },
+  reset(){ localStorage.removeItem(this.k); location.reload(); },
+  likesKey: (id) => `mlt_like_${id}`,
+  voted(id){ return localStorage.getItem(store.likesKey(id)) === '1'; },
+  setVoted(id){ localStorage.setItem(store.likesKey(id), '1'); },
+};
+
+function softFingerprint(){
+  if(!CONFIG.USE_SOFT_FINGERPRINT) return '';
+  const nav = window.navigator;
+  const data = [
+    nav.userAgent, nav.language, screen.width, screen.height, screen.colorDepth,
+    Intl.DateTimeFormat().resolvedOptions().timeZone
+  ].join('|');
+  // fast hash
+  let h=0; for(let i=0;i<data.length;i++){ h=(h<<5)-h+data.charCodeAt(i); h|=0; }
+  return String(h);
+}
+
+async function api(action, payload={}){
+  const body = JSON.stringify({ action, ...payload });
+  const res = await fetch(CONFIG.WEB_APP_URL, { method:'POST', mode:'cors', headers:{'Content-Type':'application/json'}, body });
   if(!res.ok){ throw new Error(`API ${action} failed: ${res.status}`); }
   return res.json();
 }
@@ -171,6 +402,7 @@ function renderResponses(groups){
       try {
         const out = await api('vote', { device_id: store.get(), nomination_id: id, soft: softFingerprint() });
         store.setVoted(id);
+        // reload counts
         await loadResponses();
       } catch(e){ alert(e.message); }
       btn.disabled = false;
@@ -211,7 +443,7 @@ async function loadResponses(){
 $('#viewResponsesBtn').onclick = () => loadResponses();
 $('#startOverBtn').onclick = () => store.reset();
 
-// ===== Admin panel (press "A") =====
+// ===== Admin panel (soft reveal with key) =====
 let ADMIN_KEY = '';
 function enableAdmin(){
   const key = prompt('Enter admin key');
@@ -231,6 +463,7 @@ function enableAdmin(){
     b.disabled = false;
   });
 }
+
 window.addEventListener('keydown', (e) => {
   if(e.key.toLowerCase()==='a') enableAdmin();
 });
