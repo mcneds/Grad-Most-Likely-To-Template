@@ -163,8 +163,7 @@ function renderResponses(groups){
         <h2>${htmlesc(g.name)} <span class="muted">(#${g.name_id})</span></h2>
         <div class="grid">${items}</div>
       </section>`;
-  }).join('
-');
+  }).join('\n');
 
   app.innerHTML = `<div class="grid" style="gap:24px; margin:16px 0">${sections}</div>`;
 
