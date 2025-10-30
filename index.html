@@ -55,7 +55,7 @@ const CONFIG = {
   SCHOOL_NAME: "College Heights Secondary",
   WEB_APP_URL: "https://script.google.com/macros/s/AKfycbykO6U7yEg9D2r_gWOsrWkiQ3lWQHyqJJ0D5CtVo8u8v-GKzDHI1p9obL8n-Jo6lJLP/exec",
   USE_SOFT_FINGERPRINT: true,
-  VERSION: "v0.1.3"
+  VERSION: "v0.1.4"
 };
 // ===== UTIL =====
 const $ = (sel, el=document) => el.querySelector(sel);
@@ -163,7 +163,7 @@ function renderResponses(groups){
         <h2>${htmlesc(g.name)} <span class="muted">(#${g.name_id})</span></h2>
         <div class="grid">${items}</div>
       </section>`;
-  }).join('\n');
+  }).join('\n');   <!-- FIXED -->
 
   app.innerHTML = `<div class="grid" style="gap:24px; margin:16px 0">${sections}</div>`;
 
@@ -173,7 +173,7 @@ function renderResponses(groups){
       if(store.voted(id)) return; // client lock
       btn.disabled = true;
       try {
-        const out = await api('vote', { device_id: store.get(), nomination_id: id, soft: softFingerprint() });
+        await api('vote', { device_id: store.get(), nomination_id: id, soft: softFingerprint() });
         store.setVoted(id);
         await loadResponses();
       } catch(e){ alert(e.message); }
@@ -187,7 +187,7 @@ async function loadHome(){
   try{
     const out = await api('init', { device_id: store.get(), soft: softFingerprint() });
     renderNominate(out.names);
-  }catch(e){ app.innerHTML = `<div class=\"card\">API error: ${e.message}</div>`; }
+  }catch(e){ app.innerHTML = `<div class="card">API error: ${e.message}</div>`; }
 }
 
 async function loadResponses(){
@@ -195,7 +195,7 @@ async function loadResponses(){
   try{
     const out = await api('list', {});
     renderResponses(out.responses);
-  }catch(e){ app.innerHTML = `<div class=\"card\">API error: ${e.message}</div>`; }
+  }catch(e){ app.innerHTML = `<div class="card">API error: ${e.message}</div>`; }
 }
 
 $('#viewResponsesBtn').onclick = () => loadResponses();
