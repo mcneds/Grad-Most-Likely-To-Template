@@ -47,7 +47,8 @@
 
   <main class="wrap" id="app"></main>
 
-  <div class="footer"><span id="verTag"></span> • Press <span class="kbd">A</span> for Admin.</div>
+  <!-- Footer now only shows version -->
+  <div class="footer"><span id="verTag"></span></div>
 
 <script>
 // ===== CONFIG =====
@@ -163,7 +164,7 @@ function renderResponses(groups){
         <h2>${htmlesc(g.name)} <span class="muted">(#${g.name_id})</span></h2>
         <div class="grid">${items}</div>
       </section>`;
-  }).join('\n');   <!-- FIXED -->
+  }).join('\n');
 
   app.innerHTML = `<div class="grid" style="gap:24px; margin:16px 0">${sections}</div>`;
 
@@ -201,8 +202,29 @@ async function loadResponses(){
 $('#viewResponsesBtn').onclick = () => loadResponses();
 $('#startOverBtn').onclick = () => store.reset();
 
-// ===== Admin panel (soft reveal with key) =====
+// ===== Admin panel (hidden triggers) =====
 let ADMIN_KEY = '';
+
+// 1) Keyboard: Ctrl + Alt + A (ignored inside inputs/textareas)
+window.addEventListener('keydown', (e) => {
+  const active = document.activeElement;
+  const inEditable = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+  if (inEditable) return;
+  if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a') {
+    e.preventDefault();
+    enableAdmin();
+  }
+});
+
+// 2) Easter egg: click the title 5 times quickly
+let _tap = 0, _tapTimer = null;
+$('#title').addEventListener('click', () => {
+  _tap++;
+  clearTimeout(_tapTimer);
+  _tapTimer = setTimeout(()=>{ _tap = 0; }, 800);
+  if (_tap >= 5) { _tap = 0; enableAdmin(); }
+});
+
 function enableAdmin(){
   const key = prompt('Enter admin key');
   if(!key) return;
@@ -220,10 +242,6 @@ function enableAdmin(){
     b.disabled = false;
   });
 }
-
-window.addEventListener('keydown', (e) => {
-  if(e.key.toLowerCase()==='a') enableAdmin();
-});
 
 // boot
 loadHome();
