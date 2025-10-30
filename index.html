@@ -35,29 +35,29 @@
     <div class="wrap row" style="justify-content: space-between;">
       <div>
         <div class="tag" id="schoolTag">School</div>
-        <h1 style="margin:6px 0 0" id="title">Most Likely To</h1>
+        <h1 id="title" style="margin:6px 0 0">Most Likely To</h1>
         <div class="muted" id="subtitle">Anonymous nominations. Submit as many times as you like — just not for the same person from the same device.</div>
       </div>
       <div class="row">
         <button id="viewResponsesBtn" class="secondary">View Responses</button>
-        <button id="startOverBtn" class="secondary" title="Clear device token (debug)">Reset Device</button>
+        <button id="newSubmissionBtn" class="secondary" title="Start a new nomination entry">New Submission</button>
       </div>
     </div>
   </header>
 
   <main class="wrap" id="app"></main>
 
-  <!-- Footer now only shows version -->
   <div class="footer"><span id="verTag"></span></div>
 
 <script>
 // ===== CONFIG =====
 const CONFIG = {
   SCHOOL_NAME: "College Heights Secondary",
-  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwNgU2l9e6a7SfNPkjq71xOoTFOw_gH31egzL25zeSjGg5hPT2b-vdbYmfnBgBKieDf/exec",
+  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwNgU2l9e6a7SfNPkjq71xOoTFOw_gH31egzL25zeSjGg5hPT2b-vdbYmfnBgBKieDf/exec", // /exec URL
   USE_SOFT_FINGERPRINT: true,
-  VERSION: "v0.1.5"
+  VERSION: "v0.1.7"
 };
+
 // ===== UTIL =====
 const $ = (sel, el=document) => el.querySelector(sel);
 const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
@@ -95,8 +95,7 @@ function htmlesc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>
 // ===== VIEWS =====
 const app = $('#app');
 $('#schoolTag').textContent = CONFIG.SCHOOL_NAME;
-const verEl = document.getElementById('verTag');
-if (verEl) verEl.textContent = CONFIG.VERSION || '';
+const verEl = $('#verTag'); if (verEl) verEl.textContent = CONFIG.VERSION || '';
 console.log('[MostLikelyTo]', CONFIG.VERSION || 'no-version');
 
 function renderLoading(){ app.innerHTML = `<div class="card">Loading…</div>`; }
@@ -171,7 +170,7 @@ function renderResponses(groups){
   $$('.like').forEach(btn => {
     btn.onclick = async () => {
       const id = Number(btn.dataset.id);
-      if(store.voted(id)) return; // client lock
+      if(store.voted(id)) return;
       btn.disabled = true;
       try {
         await api('vote', { device_id: store.get(), nomination_id: id, soft: softFingerprint() });
@@ -181,6 +180,9 @@ function renderResponses(groups){
       btn.disabled = false;
     };
   });
+
+  // Re-arm delete buttons if admin already unlocked
+  if (ADMIN_KEY) revealAdminDeletes();
 }
 
 async function loadHome(){
@@ -200,15 +202,36 @@ async function loadResponses(){
 }
 
 $('#viewResponsesBtn').onclick = () => loadResponses();
-$('#startOverBtn').onclick = () => store.reset();
+$('#newSubmissionBtn').onclick = () => loadHome(); // just return to the form
 
 // ===== Admin panel (hidden triggers) =====
 let ADMIN_KEY = '';
 
-// 1) Keyboard: Ctrl + Alt + A (ignored inside inputs/textareas)
+function enableAdmin(){
+  const key = prompt('Enter admin key');
+  if(!key) return;
+  ADMIN_KEY = key;
+  revealAdminDeletes();
+}
+
+function revealAdminDeletes(){
+  $$('[data-del]').forEach(b => b.classList.remove('hidden'));
+  $$('[data-del]').forEach(b => b.onclick = async () => {
+    const id = Number(b.dataset.del);
+    if(!confirm(`Delete nomination #${id}?`)) return;
+    b.disabled = true;
+    try{
+      await api('adminDelete', { admin_key: ADMIN_KEY, nomination_id: id });
+      await loadResponses();
+    }catch(e){ alert(e.message); }
+    b.disabled = false;
+  });
+}
+
+// 1) Keyboard: Ctrl + Alt + A (ignore when typing in inputs/textareas)
 window.addEventListener('keydown', (e) => {
-  const active = document.activeElement;
-  const inEditable = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+  const a = document.activeElement;
+  const inEditable = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
   if (inEditable) return;
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a') {
     e.preventDefault();
@@ -224,24 +247,6 @@ $('#title').addEventListener('click', () => {
   _tapTimer = setTimeout(()=>{ _tap = 0; }, 800);
   if (_tap >= 5) { _tap = 0; enableAdmin(); }
 });
-
-function enableAdmin(){
-  const key = prompt('Enter admin key');
-  if(!key) return;
-  ADMIN_KEY = key;
-  $$('[data-del]').forEach(b => b.classList.remove('hidden'));
-  $$('[data-del]').forEach(b => b.onclick = async () => {
-    const id = Number(b.dataset.del);
-    if(!confirm(`Delete nomination #${id}?`)) return;
-    b.disabled = true;
-    try{
-      await api('adminDelete', { admin_key: ADMIN_KEY, nomination_id: id });
-      await loadResponses();
-      setTimeout(() => enableAdmin(), 200);
-    }catch(e){ alert(e.message); }
-    b.disabled = false;
-  });
-}
 
 // boot
 loadHome();
