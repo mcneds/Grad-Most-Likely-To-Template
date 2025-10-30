@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -36,28 +35,29 @@
     <div class="wrap row" style="justify-content: space-between;">
       <div>
         <div class="tag" id="schoolTag">School</div>
-        <h1 style="margin:6px 0 0" id="title">Most Likely To</h1>
-        <div class="muted" id="subtitle">Anonymous nominations. One per device.</div>
+        <h1 id="title" style="margin:6px 0 0">Most Likely To</h1>
+        <div class="muted" id="subtitle">Anonymous nominations. Submit as many times as you like — just not for the same person from the same device.</div>
       </div>
       <div class="row">
         <button id="viewResponsesBtn" class="secondary">View Responses</button>
-        <button id="startOverBtn" class="secondary" title="Clear device token (debug)">Reset Device</button>
+        <button id="newSubmissionBtn" class="secondary" title="Start a new nomination entry">New Submission</button>
       </div>
     </div>
   </header>
 
   <main class="wrap" id="app"></main>
 
-  <div class="footer">Press <span class="kbd">A</span> for Admin.</div>
+  <div class="footer"><span id="verTag"></span></div>
 
 <script>
 // ===== CONFIG =====
 const CONFIG = {
-  SCHOOL_NAME: "Your School Name",
-  WEB_APP_URL: "App script deploy url",
-  // set true to allow IP-based hints server-side (optional, best-effort)
+  SCHOOL_NAME: "your school name here",
+  WEB_APP_URL: "your app script url here", // /exec URL
   USE_SOFT_FINGERPRINT: true,
+  VERSION: "v0.1.7"
 };
+
 // ===== UTIL =====
 const $ = (sel, el=document) => el.querySelector(sel);
 const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
@@ -78,14 +78,14 @@ function softFingerprint(){
     nav.userAgent, nav.language, screen.width, screen.height, screen.colorDepth,
     Intl.DateTimeFormat().resolvedOptions().timeZone
   ].join('|');
-  // fast hash
   let h=0; for(let i=0;i<data.length;i++){ h=(h<<5)-h+data.charCodeAt(i); h|=0; }
   return String(h);
 }
 
-async function api(action, payload={}){
+// CORS-friendly: no custom headers -> no preflight
+async function api(action, payload = {}){
   const body = JSON.stringify({ action, ...payload });
-  const res = await fetch(CONFIG.WEB_APP_URL, { method:'POST', mode:'cors', headers:{'Content-Type':'application/json'}, body });
+  const res = await fetch(CONFIG.WEB_APP_URL, { method:'POST', body });
   if(!res.ok){ throw new Error(`API ${action} failed: ${res.status}`); }
   return res.json();
 }
@@ -95,12 +95,14 @@ function htmlesc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>
 // ===== VIEWS =====
 const app = $('#app');
 $('#schoolTag').textContent = CONFIG.SCHOOL_NAME;
+const verEl = $('#verTag'); if (verEl) verEl.textContent = CONFIG.VERSION || '';
+console.log('[MostLikelyTo]', CONFIG.VERSION || 'no-version');
 
 function renderLoading(){ app.innerHTML = `<div class="card">Loading…</div>`; }
 
 function renderNominate(names){
   $('#title').textContent = 'Nominate — Most Likely To';
-  $('#subtitle').textContent = 'One submission per device. Your answers are anonymous.';
+  $('#subtitle').textContent = 'You can submit multiple times. You cannot nominate the same person twice from this device.';
   const fields = names.map(n => `
     <div class="card">
       <div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;">
@@ -121,7 +123,7 @@ function renderNominate(names){
       </div>
       <div class="grid names-grid">${fields}</div>
       <div class="row" style="justify-content:flex-end; gap:8px">
-        <button class="secondary" id="goResponses">Skip to Responses</button>
+        <button class="secondary" id="goResponses">View Responses</button>
         <button id="submitBtn">Submit Nominations</button>
       </div>
     </div>`;
@@ -133,7 +135,7 @@ function renderNominate(names){
       .filter(x => x.text.length > 0);
     $('#submitBtn').disabled = true;
     try{
-      const out = await api('submit', { device_id, soft, entries });
+      const out = await api('submit', { device_id, soft, entries, admin_key: ADMIN_KEY||'' });
       renderResponses(out.responses);
     }catch(e){ alert(e.message); }
     $('#submitBtn').disabled = false;
@@ -168,38 +170,26 @@ function renderResponses(groups){
   $$('.like').forEach(btn => {
     btn.onclick = async () => {
       const id = Number(btn.dataset.id);
-      if(store.voted(id)) return; // client lock
+      if(store.voted(id)) return;
       btn.disabled = true;
       try {
-        const out = await api('vote', { device_id: store.get(), nomination_id: id, soft: softFingerprint() });
+        await api('vote', { device_id: store.get(), nomination_id: id, soft: softFingerprint() });
         store.setVoted(id);
-        // reload counts
         await loadResponses();
       } catch(e){ alert(e.message); }
       btn.disabled = false;
     };
   });
-}
 
-function renderAlreadySubmitted(){
-  app.innerHTML = `
-    <div class="card">
-      <h2>Thanks! You already submitted nominations on this device.</h2>
-      <div class="row" style="margin-top:10px; gap:8px">
-        <button id="viewNow">View Responses</button>
-        <button class="secondary" id="resetDev">Reset Device (debug)</button>
-      </div>
-    </div>`;
-  $('#viewNow').onclick = () => loadResponses();
-  $('#resetDev').onclick = () => store.reset();
+  // Re-arm delete buttons if admin already unlocked
+  if (ADMIN_KEY) revealAdminDeletes();
 }
 
 async function loadHome(){
   renderLoading();
   try{
     const out = await api('init', { device_id: store.get(), soft: softFingerprint() });
-    if(out.alreadySubmitted){ renderAlreadySubmitted(); }
-    else { renderNominate(out.names); }
+    renderNominate(out.names);
   }catch(e){ app.innerHTML = `<div class="card">API error: ${e.message}</div>`; }
 }
 
@@ -212,31 +202,50 @@ async function loadResponses(){
 }
 
 $('#viewResponsesBtn').onclick = () => loadResponses();
-$('#startOverBtn').onclick = () => store.reset();
+$('#newSubmissionBtn').onclick = () => loadHome(); // just return to the form
 
-// ===== Admin panel (soft reveal with key) =====
+// ===== Admin panel (hidden triggers) =====
 let ADMIN_KEY = '';
+
 function enableAdmin(){
   const key = prompt('Enter admin key');
   if(!key) return;
   ADMIN_KEY = key;
-  // reveal delete buttons
-  $$("[data-del]").forEach(b => b.classList.remove('hidden'));
-  $$("[data-del]").forEach(b => b.onclick = async () => {
+  revealAdminDeletes();
+}
+
+function revealAdminDeletes(){
+  $$('[data-del]').forEach(b => b.classList.remove('hidden'));
+  $$('[data-del]').forEach(b => b.onclick = async () => {
     const id = Number(b.dataset.del);
     if(!confirm(`Delete nomination #${id}?`)) return;
     b.disabled = true;
     try{
       await api('adminDelete', { admin_key: ADMIN_KEY, nomination_id: id });
       await loadResponses();
-      setTimeout(() => enableAdmin(), 200); // re-enable delete buttons after refresh
     }catch(e){ alert(e.message); }
     b.disabled = false;
   });
 }
 
+// 1) Keyboard: Ctrl + Alt + A (ignore when typing in inputs/textareas)
 window.addEventListener('keydown', (e) => {
-  if(e.key.toLowerCase()==='a') enableAdmin();
+  const a = document.activeElement;
+  const inEditable = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
+  if (inEditable) return;
+  if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a') {
+    e.preventDefault();
+    enableAdmin();
+  }
+});
+
+// 2) Easter egg: click the title 5 times quickly
+let _tap = 0, _tapTimer = null;
+$('#title').addEventListener('click', () => {
+  _tap++;
+  clearTimeout(_tapTimer);
+  _tapTimer = setTimeout(()=>{ _tap = 0; }, 800);
+  if (_tap >= 5) { _tap = 0; enableAdmin(); }
 });
 
 // boot
