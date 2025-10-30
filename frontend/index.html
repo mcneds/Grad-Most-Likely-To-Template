@@ -1,0 +1,78 @@
+<!doctype html>
+await loadResponses();
+} catch(e){ alert(e.message); }
+btn.disabled = false;
+};
+});
+}
+
+
+function renderAlreadySubmitted(){
+app.innerHTML = `
+<div class="card">
+<h2>Thanks! You already submitted nominations on this device.</h2>
+<div class="row" style="margin-top:10px; gap:8px">
+<button id="viewNow">View Responses</button>
+<button class="secondary" id="resetDev">Reset Device (debug)</button>
+</div>
+</div>`;
+$('#viewNow').onclick = () => loadResponses();
+$('#resetDev').onclick = () => store.reset();
+}
+
+
+async function loadHome(){
+renderLoading();
+try{
+const out = await api('init', { device_id: store.get(), soft: softFingerprint() });
+if(out.alreadySubmitted){ renderAlreadySubmitted(); }
+else { renderNominate(out.names); }
+}catch(e){ app.innerHTML = `<div class="card">API error: ${e.message}</div>`; }
+}
+
+
+async function loadResponses(){
+renderLoading();
+try{
+const out = await api('list', {});
+renderResponses(out.responses);
+}catch(e){ app.innerHTML = `<div class="card">API error: ${e.message}</div>`; }
+}
+
+
+$('#viewResponsesBtn').onclick = () => loadResponses();
+$('#startOverBtn').onclick = () => store.reset();
+
+
+// ===== Admin panel (soft reveal with key) =====
+let ADMIN_KEY = '';
+function enableAdmin(){
+const key = prompt('Enter admin key');
+if(!key) return;
+ADMIN_KEY = key;
+// reveal delete buttons
+$$("[data-del]").forEach(b => b.classList.remove('hidden'));
+$$("[data-del]").forEach(b => b.onclick = async () => {
+const id = Number(b.dataset.del);
+if(!confirm(`Delete nomination #${id}?`)) return;
+b.disabled = true;
+try{
+await api('adminDelete', { admin_key: ADMIN_KEY, nomination_id: id });
+await loadResponses();
+setTimeout(() => enableAdmin(), 200); // re-enable delete buttons after refresh
+}catch(e){ alert(e.message); }
+b.disabled = false;
+});
+}
+
+
+window.addEventListener('keydown', (e) => {
+if(e.key.toLowerCase()==='a') enableAdmin();
+});
+
+
+// boot
+loadHome();
+</script>
+</body>
+</html>
