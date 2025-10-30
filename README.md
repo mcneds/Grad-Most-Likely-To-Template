@@ -240,4 +240,4 @@ README.md           # This file
 
 ## License
 
-MIT (or update to your preferred license).
+Creative Commons
