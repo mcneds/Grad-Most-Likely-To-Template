@@ -52,7 +52,7 @@
 // ===== CONFIG =====
 const CONFIG = {
   SCHOOL_NAME: "College Heights Secondary",
-  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbxRRl7r4-INc9SgUAduM61VmVmYCCO4SwXQ0ZCUXw-pW_l8CpLdEEopjRkk7pUJHLI9/exec",
+  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwdvPMS66FPWJhkAen0BRYniXtN5dvBxW48JwsDIJ6zqGoznUfJl99IEMbN3USyaPt8/exec",
   USE_SOFT_FINGERPRINT: true,
   VERSION: "v0.2.0"
 };
@@ -261,40 +261,42 @@ async function loadPendingAdmin(){
       <div class="muted">Row #${p.id} • name_id ${p.name_id}</div>
       <p style="margin:10px 0 12px; line-height:1.5">${htmlesc(p.text)}</p>
       <div class="row" style="gap:8px">
-        <button class="secondary" data-act="approve" data-id="${p.id}">Approve</button>
-        <button class="danger"    data-act="reject"  data-id="${p.id}">Reject</button>
+        <button class="secondary" data-act="approve" data-row="${p.id}">Approve</button>
+        <button class="danger"    data-act="reject"  data-row="${p.id}">Reject</button>
       </div>
     </div>
   `).join('') || `<div class="card">No pending nominations.</div>`;
 
   app.innerHTML = `
     <div class="grid" style="gap:16px; margin:16px 0">
-      <h2>Pending Moderation</h2>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2>Pending Moderation</h2>
+        <button class="secondary" id="backToResponses">Back</button>
+      </div>
       ${items}
-      <div><button class="secondary" id="backToResponses">Back to Responses</button></div>
+      <div class="muted" style="text-align:center">${CONFIG.VERSION}</div>
     </div>
   `;
 
   document.getElementById('backToResponses').onclick = () => loadResponses();
 
-  // buttons
-  $$('[data-act]').forEach(btn => {
-  btn.onclick = async () => {
-    const action = btn.dataset.act;      // 'approve' | 'reject'
-    const id     = Number(btn.dataset.id);
-    let note = '';
-    if (action === 'reject') note = prompt('Reason (optional):') || '';
-    btn.disabled = true;
-    try {
-      const r = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: id, action, note });
-      console.log('Moderate result:', r);   // sanity
-      await loadPendingAdmin();             // refresh queue
-    } catch(e){ alert(e.message); }
-    btn.disabled = false;
-  };
-});
-
+  $$('.card [data-act]').forEach(btn => {
+    btn.onclick = async () => {
+      const action = btn.dataset.act;                 // 'approve' | 'reject'
+      const rowId  = Number(btn.dataset.row);         // <-- SHEET ROW
+      let note = '';
+      if (action === 'reject') note = prompt('Reason (optional):') || '';
+      btn.disabled = true;
+      try {
+        const r = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: rowId, action, note });
+        console.log('Moderate result', r);            // shows before/after
+        await loadPendingAdmin();                     // refresh queue
+      } catch(e){ alert(e.message); }
+      btn.disabled = false;
+    };
+  });
 }
+
 
 // Keyboard: Ctrl + Alt + A (ignore when typing)
 window.addEventListener('keydown', (e) => {
