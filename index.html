@@ -15,7 +15,7 @@
     .grid { display: grid; gap: 12px; }
     .names-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
     .row { display: flex; gap: 12px; align-items: center; }
-    textarea, input[type="text"] { width: 100%; background: #0e1016; color: #e8e8e8; border: 1px solid #2b3040; padding: 10px 12px; border-radius: 10px; min-height: 60px; }
+    textarea { width: 100%; background: #0e1016; color: #e8e8e8; border: 1px solid #2b3040; padding: 10px 12px; border-radius: 10px; min-height: 60px; }
     button { background: #2b7cff; color: white; border: 0; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
     button.secondary { background: #1c2230; color: #d7d7d7; border: 1px solid #2b3040; }
     button.danger { background: #e5484d; }
@@ -27,7 +27,6 @@
     .footer { color: #8b94a2; font-size: 12px; text-align: center; padding: 40px 0; }
     .hidden { display: none; }
     .tag { display:inline-block; padding: 2px 8px; background:#1b1f2a; border:1px solid #2b3040; border-radius: 999px; font-size: 12px; color:#a7b0bf }
-    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#0e1016; border:1px solid #2b3040; border-radius:6px; padding:2px 6px; font-size:12px }
   </style>
 </head>
 <body>
@@ -38,7 +37,7 @@
         <h1 id="title" style="margin:6px 0 0">Most Likely To</h1>
         <div class="muted" id="subtitle">Anonymous, moderated nominations. Submit as many times as you like — just not for the same person from the same device.</div>
       </div>
-      <div class="row">
+      <div class="row" id="headerActions">
         <button id="viewResponsesBtn" class="secondary">View Responses</button>
         <button id="newSubmissionBtn" class="secondary" title="Start a new nomination entry">New Submission</button>
       </div>
@@ -53,9 +52,9 @@
 // ===== CONFIG =====
 const CONFIG = {
   SCHOOL_NAME: "College Heights Secondary",
-  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwNgU2l9e6a7SfNPkjq71xOoTFOw_gH31egzL25zeSjGg5hPT2b-vdbYmfnBgBKieDf/exec", // /exec URL
+  WEB_APP_URL: "PUT_YOUR_EXEC_URL_HERE",
   USE_SOFT_FINGERPRINT: true,
-  VERSION: "v0.1.7"
+  VERSION: "v0.2.0"
 };
 
 // ===== UTIL =====
@@ -65,7 +64,6 @@ const uid = () => crypto.randomUUID();
 const store = {
   get k(){ return 'mlt_device_id_v2'; },
   get(){ let v = localStorage.getItem(this.k); if(!v){ v = uid(); localStorage.setItem(this.k, v); } return v; },
-  reset(){ localStorage.removeItem(this.k); location.reload(); },
   likesKey: (id) => `mlt_like_${id}`,
   voted(id){ return localStorage.getItem(store.likesKey(id)) === '1'; },
   setVoted(id){ localStorage.setItem(store.likesKey(id), '1'); },
@@ -102,12 +100,12 @@ function renderLoading(){ app.innerHTML = `<div class="card">Loading…</div>`; 
 
 function renderNominate(names){
   $('#title').textContent = 'Nominate — Most Likely To';
-  $('#subtitle').textContent = 'You can submit multiple times. You cannot nominate the same person twice from this device. You wont get to submit again if your response is innappropriate / moderated.';
+  $('#subtitle').textContent = 'Your nominations go to a moderator before appearing publicly. You cannot nominate the same person twice from this device.';
   const fields = names.map(n => `
     <div class="card">
       <div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;">
         <div>
-          <div class="pill"><strong>${htmlesc(n.name)}</strong><span class="muted">#${n.id}</span></div>
+          <div class="pill"><strong>${htmlesc(n.name)}</strong><span class="muted"> #${n.id}</span></div>
           <div class="muted" style="margin-top:6px">Write a “most likely to …” for this person.</div>
         </div>
       </div>
@@ -118,7 +116,7 @@ function renderNominate(names){
   app.innerHTML = `
     <div class="grid" style="margin-top:12px">
       <div class="row" style="justify-content:space-between">
-        <h2>Nominate your classmates, responses subject to moderation.</h2>
+        <h2>Nominate your classmates</h2>
         <div class="muted">All fields optional — fill only the ones you want.</div>
       </div>
       <div class="grid names-grid">${fields}</div>
@@ -135,8 +133,18 @@ function renderNominate(names){
       .filter(x => x.text.length > 0);
     $('#submitBtn').disabled = true;
     try{
-      const out = await api('submit', { device_id, soft, entries, admin_key: ADMIN_KEY||'' });
-      renderResponses(out.responses);
+      await api('submit', { device_id, soft, entries, admin_key: ADMIN_KEY||'' });
+      app.innerHTML = `
+        <div class="card">
+          <h2>Thanks!</h2>
+          <p>Your nominations were submitted and are awaiting moderation. Approved entries will appear on the Responses page.</p>
+          <div class="row" style="justify-content:flex-end; gap:8px">
+            <button class="secondary" id="goHome">New Submission</button>
+            <button id="goResponses2">View Responses</button>
+          </div>
+        </div>`;
+      $('#goHome').onclick = () => loadHome();
+      $('#goResponses2').onclick = () => loadResponses();
     }catch(e){ alert(e.message); }
     $('#submitBtn').disabled = false;
   };
@@ -145,7 +153,7 @@ function renderNominate(names){
 
 function renderResponses(groups){
   $('#title').textContent = 'Responses — Most Likely To';
-  $('#subtitle').textContent = 'Browse and upvote your favorites,';
+  $('#subtitle').textContent = 'Browse and upvote your favorites';
   const sections = groups.map(g => {
     const items = g.items.length ? g.items.map(it => `
       <div class="card">
@@ -181,7 +189,6 @@ function renderResponses(groups){
     };
   });
 
-  // Re-arm delete buttons if admin already unlocked
   if (ADMIN_KEY) revealAdminDeletes();
 }
 
@@ -202,7 +209,7 @@ async function loadResponses(){
 }
 
 $('#viewResponsesBtn').onclick = () => loadResponses();
-$('#newSubmissionBtn').onclick = () => loadHome(); // just return to the form
+$('#newSubmissionBtn').onclick = () => loadHome();
 
 // ===== Admin panel (hidden triggers) =====
 let ADMIN_KEY = '';
@@ -212,6 +219,7 @@ function enableAdmin(){
   if(!key) return;
   ADMIN_KEY = key;
   revealAdminDeletes();
+  injectPendingButton();
 }
 
 function revealAdminDeletes(){
@@ -228,7 +236,58 @@ function revealAdminDeletes(){
   });
 }
 
-// 1) Keyboard: Ctrl + Alt + A (ignore when typing in inputs/textareas)
+// Admin pending queue
+function injectPendingButton(){
+  if ($('#pendingBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'pendingBtn';
+  btn.textContent = 'Pending';
+  btn.className = 'secondary';
+  btn.style.marginLeft = '8px';
+  btn.onclick = () => loadPendingAdmin();
+  $('#headerActions').appendChild(btn);
+}
+
+async function loadPendingAdmin(){
+  try{
+    const out = await api('adminListPending', { admin_key: ADMIN_KEY });
+    const rows = out.pending.map(p => `
+      <div class="card">
+        <div class="muted">For #${p.name_id}</div>
+        <p style="margin:10px 0 12px; line-height:1.5">${htmlesc(p.text)}</p>
+        <div class="row" style="justify-content:flex-end; gap:8px">
+          <button class="secondary" data-approve="${p.id}">Approve</button>
+          <button class="danger" data-reject="${p.id}">Reject</button>
+        </div>
+      </div>
+    `).join('') || `<div class="muted">No pending items.</div>`;
+
+    app.innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <h2>Pending Moderation</h2>
+        <div class="row"><button id="backToResponses" class="secondary">Back</button></div>
+      </div>
+      <div class="grid" style="gap:16px">${rows}</div>`;
+
+    $('#backToResponses').onclick = () => loadResponses();
+
+    $$('[data-approve]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: Number(b.dataset.approve), action: 'approve', note: '' });
+      await loadPendingAdmin();
+    });
+    $$('[data-reject]').forEach(b => b.onclick = async () => {
+      const note = prompt('Reason (optional):') || '';
+      b.disabled = true;
+      await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: Number(b.dataset.reject), action: 'reject', note });
+      await loadPendingAdmin();
+    });
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+// Keyboard: Ctrl + Alt + A (ignore when typing)
 window.addEventListener('keydown', (e) => {
   const a = document.activeElement;
   const inEditable = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
@@ -239,7 +298,7 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// 2) Easter egg: click the title 5 times quickly
+// Easter egg: click title 5x
 let _tap = 0, _tapTimer = null;
 $('#title').addEventListener('click', () => {
   _tap++;
