@@ -83,7 +83,11 @@ function softFingerprint(){
 // CORS-friendly: no custom headers -> no preflight
 async function api(action, payload = {}){
   const body = JSON.stringify({ action, ...payload });
-  const res = await fetch(CONFIG.WEB_APP_URL, { method:'POST', body });
+  const res = await fetch(CONFIG.WEB_APP_URL, {
+    method: 'POST',
+    body,
+    cache: 'no-store'   // <-- add this
+  });
   if(!res.ok){ throw new Error(`API ${action} failed: ${res.status}`); }
   return res.json();
 }
@@ -274,22 +278,22 @@ async function loadPendingAdmin(){
   document.getElementById('backToResponses').onclick = () => loadResponses();
 
   // buttons
-  $$('.card [data-act]').forEach(btn => {
-    btn.onclick = async () => {
-      const action = btn.dataset.act;          // 'approve' | 'reject'
-      const id     = Number(btn.dataset.id);   // sheet row number
-      let note = '';
-      if (action === 'reject') note = prompt('Reason (optional):') || '';
-      btn.disabled = true;
-      try {
-        const res = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: id, action, note });
-        // optional sanity toast
-        // alert(`${action}d #${res.id}`);
-        await loadPendingAdmin(); // refresh queue
-      } catch(e){ alert(e.message); }
-      btn.disabled = false;
-    };
-  });
+  $$('[data-act]').forEach(btn => {
+  btn.onclick = async () => {
+    const action = btn.dataset.act;      // 'approve' | 'reject'
+    const id     = Number(btn.dataset.id);
+    let note = '';
+    if (action === 'reject') note = prompt('Reason (optional):') || '';
+    btn.disabled = true;
+    try {
+      const r = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: id, action, note });
+      console.log('Moderate result:', r);   // sanity
+      await loadPendingAdmin();             // refresh queue
+    } catch(e){ alert(e.message); }
+    btn.disabled = false;
+  };
+});
+
 }
 
 // Keyboard: Ctrl + Alt + A (ignore when typing)
