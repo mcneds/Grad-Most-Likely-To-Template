@@ -83,14 +83,11 @@ function softFingerprint(){
 // CORS-friendly: no custom headers -> no preflight
 async function api(action, payload = {}){
   const body = JSON.stringify({ action, ...payload });
-  const res = await fetch(CONFIG.WEB_APP_URL, {
-    method: 'POST',
-    body,
-    cache: 'no-store'   // <-- add this
-  });
+  const res = await fetch(CONFIG.WEB_APP_URL, { method:'POST', body, cache:'no-store' });
   if(!res.ok){ throw new Error(`API ${action} failed: ${res.status}`); }
   return res.json();
 }
+
 
 function htmlesc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
@@ -257,7 +254,7 @@ async function loadPendingAdmin(){
   const pending = out.pending || [];
 
   const items = pending.map(p => `
-    <div class="card">
+    <div class="card" data-card="${p.id}">
       <div class="muted">Row #${p.id} • name_id ${p.name_id}</div>
       <p style="margin:10px 0 12px; line-height:1.5">${htmlesc(p.text)}</p>
       <div class="row" style="gap:8px">
@@ -278,19 +275,21 @@ async function loadPendingAdmin(){
     </div>
   `;
 
-  document.getElementById('backToResponses').onclick = () => loadResponses();
+  $('#backToResponses').onclick = () => loadResponses();
 
   $$('.card [data-act]').forEach(btn => {
     btn.onclick = async () => {
       const action = btn.dataset.act;                 // 'approve' | 'reject'
-      const rowId  = Number(btn.dataset.row);         // <-- SHEET ROW
+      const rowId  = Number(btn.dataset.row);         // SHEET ROW (>=2)
       let note = '';
       if (action === 'reject') note = prompt('Reason (optional):') || '';
       btn.disabled = true;
       try {
         const r = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: rowId, action, note });
-        console.log('Moderate result', r);            // shows before/after
-        await loadPendingAdmin();                     // refresh queue
+        console.log('Moderate result', r);
+        // Remove from DOM immediately for snappy UX:
+        const card = btn.closest(`[data-card="${rowId}"]`);
+        if (card) card.remove();
       } catch(e){ alert(e.message); }
       btn.disabled = false;
     };
