@@ -81,12 +81,13 @@ function softFingerprint(){
 }
 
 // CORS-friendly: no custom headers -> no preflight
-async function api(action, payload = {}){
-  const body = JSON.stringify({ action, ...payload });
-  const res = await fetch(CONFIG.WEB_APP_URL, { method:'POST', body, cache:'no-store' });
-  if(!res.ok){ throw new Error(`API ${action} failed: ${res.status}`); }
+async function api(action, payload = {}) {
+  const body = JSON.stringify({ ...payload, action }); // <- action last
+  const res  = await fetch(CONFIG.WEB_APP_URL, { method:'POST', body, cache:'no-store' });
+  if (!res.ok) throw new Error(`API ${action} failed: ${res.status}`);
   return res.json();
 }
+
 
 
 function htmlesc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
