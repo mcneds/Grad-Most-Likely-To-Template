@@ -52,7 +52,7 @@
 // ===== CONFIG =====
 const CONFIG = {
   SCHOOL_NAME: "College Heights Secondary",
-  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzC-NcL-g7jqTJS0GSfSxXDKQOLQnedXehBUjkfIFu2-eiN83RucJ4Bf4edDVZYIk1Z/exec",
+  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwGILEL1OZTZ5P_4nlsetAeI7T_it5tSqdaE_mjcWYpHB8b_clSJE3yCeUGdAjqKhSd/exec",
   USE_SOFT_FINGERPRINT: true,
   VERSION: "v0.2.0"
 };
@@ -82,8 +82,8 @@ function softFingerprint(){
 
 // CORS-friendly: no custom headers -> no preflight
 async function api(action, payload = {}) {
-  const body = JSON.stringify({ ...payload, action }); // <- action last
-  const res  = await fetch(CONFIG.WEB_APP_URL, { method:'POST', body, cache:'no-store' });
+  const body = JSON.stringify({ ...payload, action }); // action last
+  const res  = await fetch(CONFIG.WEB_APP_URL, { method: 'POST', body, cache: 'no-store' });
   if (!res.ok) throw new Error(`API ${action} failed: ${res.status}`);
   return res.json();
 }
@@ -279,22 +279,28 @@ async function loadPendingAdmin(){
   $('#backToResponses').onclick = () => loadResponses();
 
   $$('.card [data-act]').forEach(btn => {
-    btn.onclick = async () => {
-      const action = btn.dataset.act;                 // 'approve' | 'reject'
-      const rowId  = Number(btn.dataset.row);         // SHEET ROW (>=2)
-      let note = '';
-      if (action === 'reject') note = prompt('Reason (optional):') || '';
-      btn.disabled = true;
-      try {
-        const r = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: rowId, mod_action: action, note });
-        console.log('Moderate result', r);
-        // Remove from DOM immediately for snappy UX:
-        const card = btn.closest(`[data-card="${rowId}"]`);
-        if (card) card.remove();
-      } catch(e){ alert(e.message); }
-      btn.disabled = false;
-    };
-  });
+  btn.onclick = async () => {
+    const action = btn.dataset.act;              // 'approve' | 'reject'
+    const rowId  = Number(btn.dataset.row);      // sheet row (>=2)
+    let note = '';
+    if (action === 'reject') note = prompt('Reason (optional):') || '';
+    btn.disabled = true;
+    try {
+      const r = await api('adminModerate', {
+        admin_key: ADMIN_KEY,
+        nomination_id: rowId,
+        mod_action: action,                      // <-- important
+        note
+      });
+      console.log('Moderate result', r);
+      // Remove item from the list immediately
+      btn.closest(`[data-card="${rowId}"]`)?.remove();
+    } catch (e) {
+      alert(e.message);
+    }
+    btn.disabled = false;
+  };
+});
 }
 
 
