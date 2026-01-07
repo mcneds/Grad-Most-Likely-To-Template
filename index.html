@@ -286,7 +286,7 @@ async function loadPendingAdmin(){
       if (action === 'reject') note = prompt('Reason (optional):') || '';
       btn.disabled = true;
       try {
-        const r = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: rowId, action, note });
+        const r = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: rowId, mod_action: action, note });
         console.log('Moderate result', r);
         // Remove from DOM immediately for snappy UX:
         const card = btn.closest(`[data-card="${rowId}"]`);
