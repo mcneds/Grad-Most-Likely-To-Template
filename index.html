@@ -118,7 +118,7 @@ function renderNominate(names){
   app.innerHTML = `
     <div class="grid" style="margin-top:12px">
       <div class="row" style="justify-content:space-between">
-        <h2>Nominate your classmates</h2>
+        <h2>Nominate your classmates, responses subject to moderation.</h2>
         <div class="muted">All fields optional — fill only the ones you want.</div>
       </div>
       <div class="grid names-grid">${fields}</div>
@@ -145,7 +145,7 @@ function renderNominate(names){
 
 function renderResponses(groups){
   $('#title').textContent = 'Responses — Most Likely To';
-  $('#subtitle').textContent = 'Browse and upvote your favorites';
+  $('#subtitle').textContent = 'Browse and upvote your favorites,';
   const sections = groups.map(g => {
     const items = g.items.length ? g.items.map(it => `
       <div class="card">
