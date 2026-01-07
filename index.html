@@ -249,42 +249,47 @@ function injectPendingButton(){
 }
 
 async function loadPendingAdmin(){
-  try{
-    const out = await api('adminListPending', { admin_key: ADMIN_KEY });
-    const rows = out.pending.map(p => `
-      <div class="card">
-        <div class="muted">For #${p.name_id}</div>
-        <p style="margin:10px 0 12px; line-height:1.5">${htmlesc(p.text)}</p>
-        <div class="row" style="justify-content:flex-end; gap:8px">
-          <button class="secondary" data-approve="${p.id}">Approve</button>
-          <button class="danger" data-reject="${p.id}">Reject</button>
-        </div>
+  const out = await api('adminListPending', { admin_key: ADMIN_KEY });
+  const pending = out.pending || [];
+
+  const items = pending.map(p => `
+    <div class="card">
+      <div class="muted">Row #${p.id} • name_id ${p.name_id}</div>
+      <p style="margin:10px 0 12px; line-height:1.5">${htmlesc(p.text)}</p>
+      <div class="row" style="gap:8px">
+        <button class="secondary" data-act="approve" data-id="${p.id}">Approve</button>
+        <button class="danger"    data-act="reject"  data-id="${p.id}">Reject</button>
       </div>
-    `).join('') || `<div class="muted">No pending items.</div>`;
+    </div>
+  `).join('') || `<div class="card">No pending nominations.</div>`;
 
-    app.innerHTML = `
-      <div class="row" style="justify-content:space-between">
-        <h2>Pending Moderation</h2>
-        <div class="row"><button id="backToResponses" class="secondary">Back</button></div>
-      </div>
-      <div class="grid" style="gap:16px">${rows}</div>`;
+  app.innerHTML = `
+    <div class="grid" style="gap:16px; margin:16px 0">
+      <h2>Pending Moderation</h2>
+      ${items}
+      <div><button class="secondary" id="backToResponses">Back to Responses</button></div>
+    </div>
+  `;
 
-    $('#backToResponses').onclick = () => loadResponses();
+  document.getElementById('backToResponses').onclick = () => loadResponses();
 
-    $$('[data-approve]').forEach(b => b.onclick = async () => {
-      b.disabled = true;
-      await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: Number(b.dataset.approve), action: 'approve', note: '' });
-      await loadPendingAdmin();
-    });
-    $$('[data-reject]').forEach(b => b.onclick = async () => {
-      const note = prompt('Reason (optional):') || '';
-      b.disabled = true;
-      await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: Number(b.dataset.reject), action: 'reject', note });
-      await loadPendingAdmin();
-    });
-  }catch(e){
-    alert(e.message);
-  }
+  // buttons
+  $$('.card [data-act]').forEach(btn => {
+    btn.onclick = async () => {
+      const action = btn.dataset.act;          // 'approve' | 'reject'
+      const id     = Number(btn.dataset.id);   // sheet row number
+      let note = '';
+      if (action === 'reject') note = prompt('Reason (optional):') || '';
+      btn.disabled = true;
+      try {
+        const res = await api('adminModerate', { admin_key: ADMIN_KEY, nomination_id: id, action, note });
+        // optional sanity toast
+        // alert(`${action}d #${res.id}`);
+        await loadPendingAdmin(); // refresh queue
+      } catch(e){ alert(e.message); }
+      btn.disabled = false;
+    };
+  });
 }
 
 // Keyboard: Ctrl + Alt + A (ignore when typing)
