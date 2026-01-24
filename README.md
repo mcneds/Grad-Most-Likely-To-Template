@@ -32,7 +32,7 @@ Frontend runs on **GitHub Pages** (static). Backend is a **Google Apps Script** 
 
 ### 0) Create (or copy) the Google Sheet
 
-Make a Sheet with **four tabs** (see schema below). You can also copy an existing sheet.
+Make a Sheet with **three tabs**: `Names`, `Votes` and `Nominations`
 
 ### 1) Add names
 
