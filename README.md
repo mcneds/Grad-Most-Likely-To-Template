@@ -64,7 +64,7 @@ A: id    B: name
 
 ### 3) Frontend — get `index.html` from `/frontend/`
 
-If you’re using this repo as a template, the latest `index.html` lives in **`/frontend/index.html`**.
+If you’re using this repo as a template, the latest `index.html` lives in **`/frontend/index.html`**. (this repo is sometimes used to host a page)
 
 * Option A (recommended): **Copy** `/frontend/index.html` to your new repo’s root as `/index.html`.
 * Option B: Keep the file in `/frontend/` and add a tiny root redirect file:
